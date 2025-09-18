@@ -98,18 +98,24 @@ open class ESTabBar: UITabBar {
     public var itemEdgeInsets = UIEdgeInsets.zero
     
     /// Custom item width. If 0, items will be distributed equally across available width
-    public var itemWidth: CGFloat = 0.0 {
-        didSet {
+    public override var itemWidth: CGFloat {
+        get { return _itemWidth }
+        set {
+            _itemWidth = newValue
             self.setNeedsLayout()
         }
     }
+    private var _itemWidth: CGFloat = 0.0
     
     /// Spacing between items when using custom positioning
-    public var itemSpacing: CGFloat = 0.0 {
-        didSet {
+    public override var itemSpacing: CGFloat {
+        get { return _itemSpacing }
+        set {
+            _itemSpacing = newValue
             self.setNeedsLayout()
         }
     }
+    private var _itemSpacing: CGFloat = 0.0
     
     /// 是否设置为自定义布局方式，默认为空。如果为空，则通过itemPositioning属性来设置。如果不为空则忽略itemPositioning,所以当tabBar的itemCustomPositioning属性不为空时，如果想改变布局规则，请设置此属性而非itemPositioning。
     public var itemCustomPositioning: ESTabBarItemPositioning? {
@@ -280,8 +286,8 @@ internal extension ESTabBar /* Layout */ {
             }
             let width = bounds.size.width - itemEdgeInsets.left - itemEdgeInsets.right
             let height = bounds.size.height - y - itemEdgeInsets.bottom
-            let eachWidth = itemWidth == 0.0 ? width / CGFloat(containers.count) : itemWidth
-            let eachSpacing = itemSpacing == 0.0 ? 0.0 : itemSpacing
+            let eachWidth = _itemWidth == 0.0 ? width / CGFloat(containers.count) : _itemWidth
+            let eachSpacing = _itemSpacing == 0.0 ? 0.0 : _itemSpacing
             
             for container in containers {
                 container.frame = CGRect.init(x: x, y: y, width: eachWidth, height: height)
