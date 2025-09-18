@@ -96,6 +96,21 @@ open class ESTabBar: UITabBar {
     
     /// tabBar中items布局偏移量
     public var itemEdgeInsets = UIEdgeInsets.zero
+    
+    /// Custom item width. If 0, items will be distributed equally across available width
+    public var itemWidth: CGFloat = 0.0 {
+        didSet {
+            self.setNeedsLayout()
+        }
+    }
+    
+    /// Spacing between items when using custom positioning
+    public var itemSpacing: CGFloat = 0.0 {
+        didSet {
+            self.setNeedsLayout()
+        }
+    }
+    
     /// 是否设置为自定义布局方式，默认为空。如果为空，则通过itemPositioning属性来设置。如果不为空则忽略itemPositioning,所以当tabBar的itemCustomPositioning属性不为空时，如果想改变布局规则，请设置此属性而非itemPositioning。
     public var itemCustomPositioning: ESTabBarItemPositioning? {
         didSet {
@@ -241,8 +256,10 @@ internal extension ESTabBar /* Layout */ {
                     container.frame = tabBarButtons[idx].frame
                 } else {
                     // Fallback: if no valid tabBarButton frame, distribute equally
+                    guard containers.count > 0 else { continue }
                     let containerWidth = bounds.width / CGFloat(containers.count)
-                    container.frame = CGRect(x: CGFloat(idx) * containerWidth, y: 0, width: containerWidth, height: bounds.height)
+                    let containerHeight = bounds.height
+                    container.frame = CGRect(x: CGFloat(idx) * containerWidth, y: 0, width: containerWidth, height: containerHeight)
                 }
             }
         } else {
