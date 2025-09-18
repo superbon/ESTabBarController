@@ -417,10 +417,7 @@ internal extension ESTabBar /* Actions */ {
             return
         }
         
-        if (customDelegate?.tabBar(self, shouldSelect: item) ?? true) == false {
-            return
-        }
-        
+        // Check if this tab should be hijacked first
         if (customDelegate?.tabBar(self, shouldHijack: item) ?? false) == true {
             // Hijacked tabs are treated as modal actions - no selection state change
             
@@ -431,7 +428,7 @@ internal extension ESTabBar /* Actions */ {
                         // Restore the previously selected tab to maintain visual consistency
                         self?.restoreSelectionAfterHijack(currentIndex: currentIndex, animated: false)
                         // Call didHijack after animation completes with a small delay for modal presentation
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                             self?.customDelegate?.tabBar(self!, didHijack: item)
                         }
                     })
@@ -441,7 +438,7 @@ internal extension ESTabBar /* Actions */ {
                         // Restore the previously selected tab to maintain visual consistency
                         self?.restoreSelectionAfterHijack(currentIndex: currentIndex, animated: false)
                         // Call didHijack after animation completes with a small delay for modal presentation
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                             self?.customDelegate?.tabBar(self!, didHijack: item)
                         }
                     })
@@ -449,12 +446,17 @@ internal extension ESTabBar /* Actions */ {
             } else {
                 // If not animated, call didHijack with a small delay for modal presentation
                 self.restoreSelectionAfterHijack(currentIndex: currentIndex, animated: false)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                     self.customDelegate?.tabBar(self, didHijack: item)
                 }
             }
             // Early return for hijacked tabs - skip delegate call and selectedIndex change
             self.updateAccessibilityLabels()
+            return
+        }
+        
+        // For non-hijacked tabs, check if selection should proceed
+        if (customDelegate?.tabBar(self, shouldSelect: item) ?? true) == false {
             return
         }
         
