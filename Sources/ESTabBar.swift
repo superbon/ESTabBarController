@@ -588,10 +588,8 @@ extension ESTabBar: UITabBarDelegate {
             return true
         }
         
-        if originalDelegate.responds(to: #selector(UITabBarDelegate.tabBar(_:shouldSelect:))) {
-            return originalDelegate.tabBar!(tabBar, shouldSelect: item)
-        }
-        return true
+        // Call the delegate method directly - it's optional so use nil coalescing
+        return originalDelegate.tabBar?(tabBar, shouldSelect: item) ?? true
     }
     
     public func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
