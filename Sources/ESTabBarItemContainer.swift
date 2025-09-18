@@ -44,6 +44,12 @@ internal class ESTabBarItemContainer: UIControl {
     
     internal override func layoutSubviews() {
         super.layoutSubviews()
+        
+        // Defensive check: only layout if we have valid bounds
+        guard bounds.size.width > 0 && bounds.size.height > 0 else {
+            return
+        }
+        
         for subview in self.subviews {
             if let subview = subview as? ESTabBarItemContentView {
                 subview.frame = CGRect.init(x: subview.insets.left, y: subview.insets.top, width: bounds.size.width - subview.insets.left - subview.insets.right, height: bounds.size.height - subview.insets.top - subview.insets.bottom)

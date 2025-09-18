@@ -230,6 +230,11 @@ open class ESTabBarItemContentView: UIView {
         let w = self.bounds.size.width
         let h = self.bounds.size.height
         
+        // Defensive check: if bounds are zero or invalid, skip layout
+        guard w > 0 && h > 0 else {
+            return
+        }
+        
         imageView.isHidden = (imageView.image == nil)
         titleLabel.isHidden = (titleLabel.text == nil)
 

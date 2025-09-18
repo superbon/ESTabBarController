@@ -239,10 +239,18 @@ internal extension ESTabBar /* Layout */ {
             for (idx, container) in containers.enumerated(){
                 if idx < tabBarButtons.count && !tabBarButtons[idx].frame.isEmpty {
                     container.frame = tabBarButtons[idx].frame
+                } else {
+                    // Fallback: if no valid tabBarButton frame, distribute equally
+                    let containerWidth = bounds.width / CGFloat(containers.count)
+                    container.frame = CGRect(x: CGFloat(idx) * containerWidth, y: 0, width: containerWidth, height: bounds.height)
                 }
             }
         } else {
             // Custom itemPositioning
+            guard bounds.size.width > 0 && bounds.size.height > 0 && containers.count > 0 else {
+                return
+            }
+            
             var x: CGFloat = itemEdgeInsets.left
             var y: CGFloat = itemEdgeInsets.top
             switch itemCustomPositioning! {
