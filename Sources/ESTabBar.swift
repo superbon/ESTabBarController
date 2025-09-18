@@ -584,7 +584,10 @@ extension ESTabBar: UITabBarDelegate {
         }
         
         // For non-hijacked tabs, forward to original delegate
-        return originalDelegate?.tabBar?(tabBar, shouldSelect: item) ?? true
+        if let originalDelegate = originalDelegate {
+            return originalDelegate.tabBar?(tabBar, shouldSelect: item) ?? true
+        }
+        return true
     }
     
     public func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
