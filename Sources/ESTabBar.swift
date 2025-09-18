@@ -374,22 +374,31 @@ internal extension ESTabBar /* Actions */ {
         
         if (customDelegate?.tabBar(self, shouldHijack: item) ?? false) == true {
             customDelegate?.tabBar(self, didHijack: item)
+            
+            // Store the current selectedItem to preserve it
+            let previousSelectedItem = self.selectedItem
+            
             if animated {
                 if let item = item as? ESTabBarItem {
                     item.contentView.select(animated: animated, completion: { [weak self] in
                         item.contentView.deselect(animated: false, completion: nil)
+                        // Restore the previous selectedItem to prevent hijacked tab from being selected
+                        self?.selectedItem = previousSelectedItem
                         // Ensure the previously selected tab remains selected visually
                         self?.restoreSelectionAfterHijack(currentIndex: currentIndex, animated: false)
                     })
                 } else if self.isMoreItem(newIndex) {
                     moreContentView?.select(animated: animated, completion: { [weak self] in
                         self?.moreContentView?.deselect(animated: false, completion: nil)
+                        // Restore the previous selectedItem to prevent hijacked tab from being selected
+                        self?.selectedItem = previousSelectedItem
                         // Ensure the previously selected tab remains selected visually
                         self?.restoreSelectionAfterHijack(currentIndex: currentIndex, animated: false)
                     })
                 }
             } else {
-                // If not animated, immediately restore the previous selection
+                // If not animated, immediately restore the previous selection and selectedItem
+                self.selectedItem = previousSelectedItem
                 self.restoreSelectionAfterHijack(currentIndex: currentIndex, animated: false)
             }
             return
