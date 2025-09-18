@@ -381,19 +381,20 @@ internal extension ESTabBar /* Actions */ {
         }
         
         if (customDelegate?.tabBar(self, shouldHijack: item) ?? false) == true {
+            // Hijacked tabs are treated as modal actions - no selection state change
             customDelegate?.tabBar(self, didHijack: item)
             
             if animated {
                 if let item = item as? ESTabBarItem {
                     item.contentView.select(animated: animated, completion: { [weak self] in
                         item.contentView.deselect(animated: false, completion: nil)
-                        // Ensure the previously selected tab remains selected visually
+                        // Restore the previously selected tab to maintain visual consistency
                         self?.restoreSelectionAfterHijack(currentIndex: currentIndex, animated: false)
                     })
                 } else if self.isMoreItem(newIndex) {
                     moreContentView?.select(animated: animated, completion: { [weak self] in
                         self?.moreContentView?.deselect(animated: false, completion: nil)
-                        // Ensure the previously selected tab remains selected visually
+                        // Restore the previously selected tab to maintain visual consistency
                         self?.restoreSelectionAfterHijack(currentIndex: currentIndex, animated: false)
                     })
                 }
@@ -401,7 +402,7 @@ internal extension ESTabBar /* Actions */ {
                 // If not animated, immediately restore the previous selection
                 self.restoreSelectionAfterHijack(currentIndex: currentIndex, animated: false)
             }
-            return
+            return // Early return - no delegate call, no selectedIndex change
         }
         
         if currentIndex != newIndex {
