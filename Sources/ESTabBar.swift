@@ -176,6 +176,11 @@ open class ESTabBar: UITabBar {
     open override func layoutSubviews() {
         super.layoutSubviews()
         self.updateLayout()
+        
+        // Ensure system buttons remain hidden after layout
+        DispatchQueue.main.async {
+            self.ensureSystemButtonsHidden()
+        }
     }
     
     open override func sizeThatFits(_ size: CGSize) -> CGSize {
@@ -198,11 +203,26 @@ open class ESTabBar: UITabBar {
         return b
     }
     
+    private func ensureSystemButtonsHidden() {
+        guard let tabBarItems = self.items else { return }
+        
+        let tabBarButtons = subviews.filter { subview -> Bool in
+            if let cls = NSClassFromString("UITabBarButton") {
+                return subview.isKind(of: cls)
+            }
+            return false
+        }
+        
+        for (idx, item) in tabBarItems.enumerated() {
+            if idx < tabBarButtons.count && item is ESTabBarItem {
+                tabBarButtons[idx].isHidden = true
+            }
+        }
+    }
+
 }
 
-internal extension ESTabBar /* Layout */ {
-    
-    func updateLayout() {
+internal extension ESTabBar /* Layout */ {    func updateLayout() {
         guard let tabBarItems = self.items else {
             ESTabBarController.printError("empty items")
             return
@@ -228,18 +248,12 @@ internal extension ESTabBar /* Layout */ {
                 container.isHidden = true
             }
         } else {
-            for (idx, item) in tabBarItems.enumerated() {
-                if idx < tabBarButtons.count {
-                    if let _ = item as? ESTabBarItem {
-                        tabBarButtons[idx].isHidden = true
-                    } else {
-                        tabBarButtons[idx].isHidden = false
-                    }
-                    if isMoreItem(idx), let _ = moreContentView {
-                        tabBarButtons[idx].isHidden = true
-                    }
-                }
+            // Always hide all system tab bar buttons when using custom containers
+            for button in tabBarButtons {
+                button.isHidden = true
             }
+            
+            // Show our custom containers
             for (_, container) in containers.enumerated(){
                 container.isHidden = false
             }
@@ -343,6 +357,10 @@ internal extension ESTabBar /* Actions */ {
         
         self.updateAccessibilityLabels()
         self.setNeedsLayout()
+        // Force layout update to ensure proper visibility
+        DispatchQueue.main.async {
+            self.updateLayout()
+        }
     }
     
     @objc func highlightAction(_ sender: AnyObject?) {
@@ -425,7 +443,9 @@ internal extension ESTabBar /* Actions */ {
                 // If not animated, immediately restore the previous selection
                 self.restoreSelectionAfterHijack(currentIndex: currentIndex, animated: false)
             }
-            return // Early return - no delegate call, no selectedIndex change
+            // Early return for hijacked tabs - skip delegate call and selectedIndex change
+            self.updateAccessibilityLabels()
+            return
         }
         
         if currentIndex != newIndex {

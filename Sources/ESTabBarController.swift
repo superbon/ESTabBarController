@@ -105,10 +105,8 @@ open class ESTabBarController: UITabBarController, ESTabBarDelegate {
             return;
         }
         
-        // Check if this tab should be hijacked - if so, don't change selectedIndex (treat as modal)
-        if let vc = viewControllers?[idx], shouldHijackHandler?(self, vc, idx) ?? false {
-            return // Don't change selectedIndex for hijacked tabs
-        }
+        // Note: Hijack handling is done in ESTabBar's select method via customDelegate
+        // If we reach this point, the tab was not hijacked and should proceed normally
         
         if idx == tabBar.items!.count - 1, ESTabBarController.isShowingMore(self) {
             ignoreNextSelection = true
