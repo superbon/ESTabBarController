@@ -423,7 +423,6 @@ internal extension ESTabBar /* Actions */ {
         
         if (customDelegate?.tabBar(self, shouldHijack: item) ?? false) == true {
             // Hijacked tabs are treated as modal actions - no selection state change
-            customDelegate?.tabBar(self, didHijack: item)
             
             if animated {
                 if let item = item as? ESTabBarItem {
@@ -431,17 +430,28 @@ internal extension ESTabBar /* Actions */ {
                         item.contentView.deselect(animated: false, completion: nil)
                         // Restore the previously selected tab to maintain visual consistency
                         self?.restoreSelectionAfterHijack(currentIndex: currentIndex, animated: false)
+                        // Call didHijack after animation completes with a small delay for modal presentation
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            self?.customDelegate?.tabBar(self!, didHijack: item)
+                        }
                     })
                 } else if self.isMoreItem(newIndex) {
                     moreContentView?.select(animated: animated, completion: { [weak self] in
                         self?.moreContentView?.deselect(animated: false, completion: nil)
                         // Restore the previously selected tab to maintain visual consistency
                         self?.restoreSelectionAfterHijack(currentIndex: currentIndex, animated: false)
+                        // Call didHijack after animation completes with a small delay for modal presentation
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            self?.customDelegate?.tabBar(self!, didHijack: item)
+                        }
                     })
                 }
             } else {
-                // If not animated, immediately restore the previous selection
+                // If not animated, call didHijack with a small delay for modal presentation
                 self.restoreSelectionAfterHijack(currentIndex: currentIndex, animated: false)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    self.customDelegate?.tabBar(self, didHijack: item)
+                }
             }
             // Early return for hijacked tabs - skip delegate call and selectedIndex change
             self.updateAccessibilityLabels()
