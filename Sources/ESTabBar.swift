@@ -273,6 +273,17 @@ internal extension ESTabBar /* Actions */ {
         return ESTabBarController.isShowingMore(tabBarController) && (index == (items?.count ?? 0) - 1)
     }
     
+    func restoreSelectionAfterHijack(currentIndex: Int, animated: Bool) {
+        // Restore the visual selection to the previously selected tab
+        if currentIndex != -1 && currentIndex < items?.count ?? 0 {
+            if let currentItem = items?[currentIndex] as? ESTabBarItem {
+                currentItem.contentView.select(animated: animated, completion: nil)
+            } else if self.isMoreItem(currentIndex) {
+                moreContentView?.select(animated: animated, completion: nil)
+            }
+        }
+    }
+    
     func removeAll() {
         for container in containers {
             container.removeFromSuperview()
@@ -365,14 +376,21 @@ internal extension ESTabBar /* Actions */ {
             customDelegate?.tabBar(self, didHijack: item)
             if animated {
                 if let item = item as? ESTabBarItem {
-                    item.contentView.select(animated: animated, completion: {
+                    item.contentView.select(animated: animated, completion: { [weak self] in
                         item.contentView.deselect(animated: false, completion: nil)
+                        // Ensure the previously selected tab remains selected visually
+                        self?.restoreSelectionAfterHijack(currentIndex: currentIndex, animated: false)
                     })
                 } else if self.isMoreItem(newIndex) {
-                    moreContentView?.select(animated: animated, completion: {
-                        self.moreContentView?.deselect(animated: animated, completion: nil)
+                    moreContentView?.select(animated: animated, completion: { [weak self] in
+                        self?.moreContentView?.deselect(animated: false, completion: nil)
+                        // Ensure the previously selected tab remains selected visually
+                        self?.restoreSelectionAfterHijack(currentIndex: currentIndex, animated: false)
                     })
                 }
+            } else {
+                // If not animated, immediately restore the previous selection
+                self.restoreSelectionAfterHijack(currentIndex: currentIndex, animated: false)
             }
             return
         }
