@@ -171,11 +171,11 @@ open class ESTabBar: UITabBar {
     
     open override var delegate: UITabBarDelegate? {
         get {
-            return super.delegate
+            return originalDelegate
         }
         set {
             originalDelegate = newValue
-            super.delegate = self
+            super.delegate = newValue
         }
     }
     
@@ -569,36 +569,5 @@ internal extension ESTabBar /* Actions */ {
             }
             
         }
-    }
-}
-
-// MARK: - UITabBarDelegate Implementation for Hijack Filtering
-extension ESTabBar: UITabBarDelegate {
-    
-    public func tabBar(_ tabBar: UITabBar, shouldSelect item: UITabBarItem) -> Bool {
-        // Check if this item should be hijacked
-        if let customDelegate = customDelegate,
-           customDelegate.tabBar(self, shouldHijack: item) {
-            // Hijacked tabs should not go through normal selection - return false to prevent system selection
-            return false
-        }
-        
-        // For non-hijacked tabs, forward to original delegate
-        // Since we can't reliably call the optional delegate method due to Swift type issues,
-        // we'll just return true (allow selection) for non-hijacked tabs
-        // The original delegate will be called through the normal UITabBar mechanism
-        return true
-    }
-    
-    public func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
-        // Check if this item should be hijacked (shouldn't happen due to shouldSelect, but safety check)
-        if let customDelegate = customDelegate,
-           customDelegate.tabBar(self, shouldHijack: item) {
-            // This shouldn't happen if shouldSelect is working, but don't forward to delegate
-            return
-        }
-        
-        // For non-hijacked tabs, forward to original delegate
-        originalDelegate?.tabBar?(tabBar, didSelect: item)
     }
 }
