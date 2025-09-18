@@ -131,6 +131,10 @@ open class ESTabBarController: UITabBarController, ESTabBarDelegate {
     // MARK: - ESTabBar delegate
     internal func tabBar(_ tabBar: UITabBar, shouldSelect item: UITabBarItem) -> Bool {
         if let idx = tabBar.items?.firstIndex(of: item), let vc = viewControllers?[idx] {
+            // Check if this tab should be hijacked - if so, prevent the selection
+            if shouldHijackHandler?(self, vc, idx) ?? false {
+                return false
+            }
             return delegate?.tabBarController?(self, shouldSelect: vc) ?? true
         }
         return true
