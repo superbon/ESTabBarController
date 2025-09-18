@@ -150,6 +150,22 @@ open class ESTabBar: UITabBar {
         }
     }
     
+    open override var selectedItem: UITabBarItem? {
+        get {
+            return super.selectedItem
+        }
+        set {
+            // Prevent hijacked tabs from becoming selected
+            if let newItem = newValue,
+               let customDelegate = customDelegate,
+               customDelegate.tabBar(self, shouldHijack: newItem) {
+                // Don't set selectedItem for hijacked tabs - maintain current selection
+                return
+            }
+            super.selectedItem = newValue
+        }
+    }
+    
     open var isEditing: Bool = false {
         didSet {
             if oldValue != isEditing {
