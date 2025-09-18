@@ -99,6 +99,23 @@ open class ESTabBarController: UITabBarController, ESTabBarDelegate {
         self.setValue(tabBar, forKey: "tabBar")
     }
 
+    // Override selectedIndex to prevent hijacked tabs from changing the selection
+    open override var selectedIndex: Int {
+        get {
+            return super.selectedIndex
+        }
+        set {
+            // Check if the new index corresponds to a hijacked tab
+            if newValue >= 0 && newValue < viewControllers?.count ?? 0,
+               let vc = viewControllers?[newValue],
+               shouldHijackHandler?(self, vc, newValue) ?? false {
+                // This is a hijacked tab - don't change selectedIndex
+                return
+            }
+            super.selectedIndex = newValue
+        }
+    }
+
     // MARK: - UITabBar delegate
     open override func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
         guard let idx = tabBar.items?.firstIndex(of: item) else {
