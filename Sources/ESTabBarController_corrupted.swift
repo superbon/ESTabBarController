@@ -2,7 +2,22 @@
 //  ESTabBarController.swift
 //
 //  Created by Vincent Li on 2017/2/8.
-//  Copyright (c) 2013-2020 ESTabBarController (https://github.com/eggswift/ESTabBarController)
+//  Copyright (c) 2013-2020 ESTabBarController (https://github.com/eggswift/ESTabBar    open override func tabBar(_ tabBar: UITabBar, shouldSelect item: UITabBarItem) -> Bool {
+        if let idx = tabBar.items?.firstIndex(of: item), let vc = viewControllers?[idx] {
+            print("ESTabBarController.shouldSelect: index=\(idx)")
+            
+            // Check if this tab should be hijacked - if so, block system selection entirely
+            if shouldHijackHandler?(self, vc, idx) ?? false {
+                print("ESTabBarController.shouldSelect: BLOCKING hijacked tab \(idx) from system selection")
+                return false
+            }
+            
+            print("ESTabBarController.shouldSelect: allowing non-hijacked tab \(idx)")
+            // Note: This method only handles normal tab selection permission for non-hijacked tabs
+            return delegate?.tabBarController?(self, shouldSelect: vc) ?? true
+        }
+        return true
+    }er)
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy
 //  of this software and associated documentation files (the "Software"), to deal
@@ -67,9 +82,7 @@ open class ESTabBarController: UITabBarController, ESTabBarDelegate {
                 return
             }
             let value = (ESTabBarController.isShowingMore(self) && index > items.count - 1) ? items.count - 1 : index
-            print("ESTabBarController.selectedViewController: skipping select call to prevent crash")
-            // Skip calling tabBar.select to prevent "Directly modifying a tab bar managed by a tab bar controller is not allowed" crash
-            // The system UITabBar will handle the selection through normal mechanisms
+            tabBar.select(itemAtIndex: value, animated: false)
         }
     }
     
@@ -97,9 +110,7 @@ open class ESTabBarController: UITabBarController, ESTabBarDelegate {
                 return
             }
             let value = (ESTabBarController.isShowingMore(self) && newValue > items.count - 1) ? items.count - 1 : newValue
-            print("ESTabBarController.selectedIndex: skipping select call to prevent crash")
-            // Skip calling tabBar.select to prevent "Directly modifying a tab bar managed by a tab bar controller is not allowed" crash
-            // The system UITabBar will handle the selection through normal mechanisms
+            tabBar.select(itemAtIndex: value, animated: false)
         }
     }
     
@@ -111,43 +122,13 @@ open class ESTabBarController: UITabBarController, ESTabBarDelegate {
             tabBar.delegate = self
             tabBar.customDelegate = self
             tabBar.tabBarController = self
-            
-            // GLOBAL glass effect elimination for ALL tabs
-            tabBar.layer.allowsGroupOpacity = false
-            tabBar.layer.shouldRasterize = false
-            
-            // Completely disable ALL system selection animations
-            if #available(iOS 13.0, *) {
-                tabBar.standardAppearance.selectionIndicatorTintColor = UIColor.clear
-                tabBar.standardAppearance.selectionIndicatorImage = nil
-                tabBar.standardAppearance.stackedLayoutAppearance.selected.titleTextAttributes = [:]
-                tabBar.standardAppearance.stackedLayoutAppearance.selected.iconColor = UIColor.clear
-                tabBar.standardAppearance.inlineLayoutAppearance.selected.titleTextAttributes = [:]
-                tabBar.standardAppearance.inlineLayoutAppearance.selected.iconColor = UIColor.clear
-                tabBar.standardAppearance.compactInlineLayoutAppearance.selected.titleTextAttributes = [:]
-                tabBar.standardAppearance.compactInlineLayoutAppearance.selected.iconColor = UIColor.clear
-                
-                if #available(iOS 15.0, *) {
-                    tabBar.scrollEdgeAppearance = tabBar.standardAppearance
-                }
-            }
-            
-            // Legacy iOS support
-            tabBar.selectionIndicatorImage = nil
-            tabBar.backgroundImage = UIImage()
-            tabBar.shadowImage = UIImage()
-            
             return tabBar
         }()
         self.setValue(tabBar, forKey: "tabBar")
-        
-        // Global animation blocking at controller level
-        self.view.layer.allowsGroupOpacity = false
-        self.view.layer.shouldRasterize = false
     }
 
     // MARK: - UITabBar delegate
-    public func tabBar(_ tabBar: UITabBar, shouldSelect item: UITabBarItem) -> Bool {
+    open override func tabBar(_ tabBar: UITabBar, shouldSelect item: UITabBarItem) -> Bool {
         guard let idx = tabBar.items?.firstIndex(of: item) else {
             return true
         }
@@ -157,9 +138,7 @@ open class ESTabBarController: UITabBarController, ESTabBarDelegate {
         // Check if this tab is hijacked - if so, block system selection entirely
         if let vc = viewControllers?[idx],
            shouldHijackHandler?(self, vc, idx) ?? false {
-            print("ESTabBarController.shouldSelect (system): BLOCKING hijacked tab \(idx) and calling hijack handler")
-            // Call the hijack handler directly here since we're blocking the selection
-            didHijackHandler?(self, vc, idx)
+            print("ESTabBarController.shouldSelect (system): BLOCKING hijacked tab \(idx)")
             return false
         }
         
@@ -210,6 +189,15 @@ open class ESTabBarController: UITabBarController, ESTabBarDelegate {
     }
     
     // MARK: - ESTabBar delegate
+    internal func tabBar(_ tabBar: UITabBar, shouldSelect item: UITabBarItem) -> Bool {
+        if let idx = tabBar.items?.firstIndex(of: item), let vc = viewControllers?[idx] {
+            // Note: Hijacked tabs are handled separately in ESTabBar before this method is called
+            // This method only handles normal tab selection permission
+            return delegate?.tabBarController?(self, shouldSelect: vc) ?? true
+        }
+        return true
+    }
+    
     internal func tabBar(_ tabBar: UITabBar, shouldHijack item: UITabBarItem) -> Bool {
         if let idx = tabBar.items?.firstIndex(of: item), let vc = viewControllers?[idx] {
             return shouldHijackHandler?(self, vc, idx) ?? false

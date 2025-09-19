@@ -81,7 +81,18 @@ internal protocol ESTabBarDelegate: NSObjectProtocol {
 /// ESTabBar是高度自定义的UITabBar子类，通过添加UIControl的方式实现自定义tabBarItem的效果。目前支持tabBar的大部分属性的设置，例如delegate,items,selectedImge,itemPositioning,itemWidth,itemSpacing等，以后会更加细致的优化tabBar原有属性的设置效果。
 open class ESTabBar: UITabBar {
 
-    internal weak var customDelegate: ESTabBarDelegate?
+    internal weak var customDelegate: ESTabBarDelegate? {
+        didSet {
+            // Update system button states when delegate changes
+            DispatchQueue.main.async {
+                self.updateSystemButtonStates()
+            }
+        }
+    }
+    
+    /// Prevent multiple hijack calls during a single touch event
+    private var lastHijackTime: TimeInterval = 0
+    private var lastHijackedIndex: Int = -1
     
     /// set value > 0 to change tabbar height
     /// 设置 > 0 的值了来修改TabBar的高度
@@ -150,23 +161,206 @@ open class ESTabBar: UITabBar {
         }
     }
     
-    open override var selectedItem: UITabBarItem? {
-        get {
-            return super.selectedItem
+    // Override touchesEnded to prevent system glass effect on hijacked tabs
+    open override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        // GLOBAL glass effect prevention for ALL tabs
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        
+        guard let touch = touches.first else {
+            super.touchesEnded(touches, with: event)
+            CATransaction.commit()
+            return
         }
-        set {
-            // Prevent hijacked tabs from becoming selected
-            if let newItem = newValue,
-               let customDelegate = customDelegate,
-               customDelegate.tabBar(self, shouldHijack: newItem) {
-                // Don't set selectedItem for hijacked tabs - maintain current selection
-                return
+        
+        let location = touch.location(in: self)
+        
+        // Check if touch is on a hijacked tab
+        for (index, container) in containers.enumerated() {
+            if container.frame.contains(location) {
+                if let item = items?[index],
+                   let customDelegate = customDelegate,
+                   customDelegate.tabBar(self, shouldHijack: item) {
+                    print("ESTabBar.touchesEnded: HIJACKED tab touched - blocking system handling")
+                    // Don't call super for hijacked tabs - this prevents glass effect
+                    CATransaction.commit()
+                    return
+                }
+                break
             }
-            super.selectedItem = newValue
         }
+        
+        // For non-hijacked tabs, allow normal system handling but block animations
+        super.touchesEnded(touches, with: event)
+        CATransaction.commit()
     }
     
-    // Store the original delegate to prevent system delegate calls for hijacked tabs
+    // Override touchesCancelled to prevent system glass effect on hijacked tabs
+    open override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        // GLOBAL glass effect prevention for ALL tabs
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        
+        guard let touch = touches.first else {
+            super.touchesCancelled(touches, with: event)
+            CATransaction.commit()
+            return
+        }
+        
+        let location = touch.location(in: self)
+        
+        // Check if touch is on a hijacked tab
+        for (index, container) in containers.enumerated() {
+            if container.frame.contains(location) {
+                if let item = items?[index],
+                   let customDelegate = customDelegate,
+                   customDelegate.tabBar(self, shouldHijack: item) {
+                    print("ESTabBar.touchesCancelled: HIJACKED tab touched - blocking system handling")
+                    // Don't call super for hijacked tabs - this prevents glass effect
+                    CATransaction.commit()
+                    return
+                }
+                break
+            }
+        }
+        
+        // For non-hijacked tabs, allow normal system handling but block animations
+        super.touchesCancelled(touches, with: event)
+        CATransaction.commit()
+    }
+    
+    // Override hitTest to prevent system from detecting touches on hijacked tabs
+    open override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        // Check if touch is on a hijacked tab
+        for (index, container) in containers.enumerated() {
+            if container.frame.contains(point) {
+                if let item = items?[index],
+                   let customDelegate = customDelegate,
+                   customDelegate.tabBar(self, shouldHijack: item) {
+                    
+                    let currentTime = Date.timeIntervalSinceReferenceDate
+                    
+                    // Prevent multiple calls within 0.5 seconds for the same tab
+                    if currentTime - lastHijackTime < 0.5 && lastHijackedIndex == index {
+                        print("ESTabBar.hitTest: HIJACKED tab \(index) hit - debouncing multiple calls")
+                        return nil
+                    }
+                    
+                    print("ESTabBar.hitTest: HIJACKED tab \(index) hit - returning nil and triggering hijack")
+                    
+                    lastHijackTime = currentTime
+                    lastHijackedIndex = index
+                    
+                    // Trigger the hijack handler with a small delay to ensure single call
+                    DispatchQueue.main.async {
+                        print("ESTabBar.hitTest: calling didHijack for tab \(index) from hitTest")
+                        customDelegate.tabBar(self, didHijack: item)
+                    }
+                    
+                    // Return nil to completely prevent system processing
+                    return nil
+                }
+                break
+            }
+        }
+        
+        // For non-hijacked tabs, allow normal system hit testing
+        return super.hitTest(point, with: event)
+    }
+    
+    // Override selection indicator methods to prevent glass effect
+    open override var selectionIndicatorImage: UIImage? {
+        get { return nil }
+        set { /* ignore */ }
+    }
+    
+    // Disable system animations completely
+    open override func setNeedsDisplay() {
+        // Block all display updates that can trigger glass effects
+        return
+    }
+    
+    // Override layout methods to prevent glass effect animations
+    open override func setNeedsLayout() {
+        // Only allow layout for non-animation scenarios
+        super.setNeedsLayout()
+    }
+    
+    open override func layoutIfNeeded() {
+        // Disable animations during layout
+        let animationsEnabled = UIView.areAnimationsEnabled
+        UIView.setAnimationsEnabled(false)
+        super.layoutIfNeeded()
+        UIView.setAnimationsEnabled(animationsEnabled)
+    }
+    
+    // Override CALayer actions to prevent glass effect animations for ALL tabs
+    public override func action(for layer: CALayer, forKey event: String) -> CAAction? {
+        // Block ALL layer animations that could create glass effects on any tab
+        if event == "position" || event == "opacity" || event == "transform" || 
+           event == "bounds" || event == "frame" || event == "backgroundColor" ||
+           event == "shadowOpacity" || event == "shadowOffset" || event == "shadowRadius" {
+            return NSNull()
+        }
+        return super.action(for: layer, forKey: event)
+    }
+    
+    // Override ALL touch methods to disable glass effects globally
+    open override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        // GLOBAL glass effect prevention for ALL tabs
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        if let window = self.window {
+            window.layer.speed = 0.01 // Extremely slow to prevent visible animations
+        }
+        
+        guard let touch = touches.first else {
+            super.touchesBegan(touches, with: event)
+            CATransaction.commit()
+            return
+        }
+        
+        let location = touch.location(in: self)
+        
+        // Check if touch is on a hijacked tab
+        for (index, container) in containers.enumerated() {
+            if container.frame.contains(location) {
+                if let item = items?[index],
+                   let customDelegate = customDelegate,
+                   customDelegate.tabBar(self, shouldHijack: item) {
+                    print("ESTabBar.touchesBegan: HIJACKED tab \(index) touched - IMMEDIATELY triggering hijack handler")
+                    
+                    // Re-enable animations first
+                    CATransaction.commit()
+                    if let window = self.window {
+                        window.layer.speed = 1.0
+                    }
+                    
+                    // Immediately trigger the hijack handler to beat the system delegate
+                    print("ESTabBar.touchesBegan: calling didHijack for tab \(index) NOW")
+                    customDelegate.tabBar(self, didHijack: item)
+                    
+                    // Don't call super to prevent any system processing
+                    return
+                }
+                break
+            }
+        }
+        
+        // For non-hijacked tabs, still prevent glass effect but allow selection
+        print("ESTabBar.touchesBegan: NON-HIJACKED tab touched - preventing glass effect")
+        super.touchesBegan(touches, with: event)
+        
+        // Re-enable animations quickly for normal tabs
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            if let window = self.window {
+                window.layer.speed = 1.0
+            }
+        }
+        CATransaction.commit()
+    }
+    
+    // Store the original delegate
     private weak var originalDelegate: UITabBarDelegate?
     
     open override var delegate: UITabBarDelegate? {
@@ -175,6 +369,8 @@ open class ESTabBar: UITabBar {
         }
         set {
             originalDelegate = newValue
+            // Don't intercept delegate calls - let the system handle them normally
+            // We prevent hijacked tabs at the hitTest level instead
             super.delegate = newValue
         }
     }
@@ -203,12 +399,53 @@ open class ESTabBar: UITabBar {
     }
     
     open override func layoutSubviews() {
+        // Completely disable animations during layout
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        
         super.layoutSubviews()
         self.updateLayout()
+        
+        CATransaction.commit()
         
         // Ensure system buttons remain hidden after layout
         DispatchQueue.main.async {
             self.ensureSystemButtonsHidden()
+        }
+    }
+    
+    // Call this method whenever items change to ensure hijacked tabs are properly handled
+    private func updateSystemButtonStates() {
+        print("ESTabBar.updateSystemButtonStates: called")
+        ensureSystemButtonsHidden()
+        
+        // Also update container interactions for hijacked tabs
+        for (index, container) in containers.enumerated() {
+            if index < items?.count ?? 0,
+               let item = items?[index],
+               let customDelegate = customDelegate,
+               customDelegate.tabBar(self, shouldHijack: item) {
+                container.isUserInteractionEnabled = false
+                
+                // Disable animations on content views for hijacked tabs
+                if let esItem = item as? ESTabBarItem {
+                    esItem.contentView.layer.allowsGroupOpacity = false
+                    esItem.contentView.layer.shouldRasterize = false
+                    UIView.setAnimationsEnabled(false)
+                    esItem.contentView.isUserInteractionEnabled = false
+                    UIView.setAnimationsEnabled(true)
+                }
+                
+                print("ESTabBar.updateSystemButtonStates: disabled container interaction for hijacked tab \(index)")
+            } else if index < items?.count ?? 0,
+                      let item = items?[index] {
+                container.isUserInteractionEnabled = true
+                
+                // Re-enable for non-hijacked tabs
+                if let esItem = item as? ESTabBarItem {
+                    esItem.contentView.isUserInteractionEnabled = true
+                }
+            }
         }
     }
     
@@ -242,9 +479,27 @@ open class ESTabBar: UITabBar {
             return false
         }
         
-        for (idx, item) in tabBarItems.enumerated() {
-            if idx < tabBarButtons.count && item is ESTabBarItem {
-                tabBarButtons[idx].isHidden = true
+        // Completely hide and disable system buttons for hijacked tabs
+        for (index, button) in tabBarButtons.enumerated() {
+            if index < tabBarItems.count {
+                let item = tabBarItems[index]
+                if let customDelegate = customDelegate,
+                   customDelegate.tabBar(self, shouldHijack: item) {
+                    // For hijacked tabs, completely remove the button from the view hierarchy
+                    button.isHidden = true
+                    button.isUserInteractionEnabled = false
+                    button.alpha = 0.0
+                    button.removeFromSuperview() // Completely remove it
+                    print("ESTabBar.ensureSystemButtonsHidden: REMOVED system button for hijacked tab \(index)")
+                } else {
+                    // For non-hijacked tabs, ensure button is hidden but present (ESTabBar uses custom containers)
+                    button.isHidden = true
+                    button.isUserInteractionEnabled = false
+                    button.alpha = 0.0
+                }
+            } else {
+                button.isHidden = true
+                button.removeFromSuperview()
             }
         }
     }
@@ -376,6 +631,15 @@ internal extension ESTabBar /* Actions */ {
             self.addSubview(container)
             self.containers.append(container)
             
+            // Disable user interaction for hijacked tabs to prevent any visual feedback
+            if let customDelegate = customDelegate,
+               customDelegate.tabBar(self, shouldHijack: item) {
+                container.isUserInteractionEnabled = false
+                print("ESTabBar.reload: disabled interaction for hijacked container \(idx)")
+            } else {
+                container.isUserInteractionEnabled = true
+            }
+            
             if let item = item as? ESTabBarItem {
                 container.addSubview(item.contentView)
             }
@@ -389,6 +653,8 @@ internal extension ESTabBar /* Actions */ {
         // Force layout update to ensure proper visibility
         DispatchQueue.main.async {
             self.updateLayout()
+            // Update system button states after layout to handle hijacked tabs
+            self.updateSystemButtonStates()
         }
     }
     
@@ -436,7 +702,27 @@ internal extension ESTabBar /* Actions */ {
         guard let container = sender as? ESTabBarItemContainer else {
             return
         }
-        select(itemAtIndex: container.tag - 1000, animated: true)
+        
+        let index = container.tag - 1000
+        guard index >= 0 && index < items?.count ?? 0, let item = items?[index] else {
+            return
+        }
+        
+        print("ESTabBar.selectAction: index=\(index)")
+        
+        // Check if this is a hijacked tab
+        if let customDelegate = customDelegate,
+           customDelegate.tabBar(self, shouldHijack: item) {
+            print("ESTabBar.selectAction: HIJACKED tab - calling didHijack directly")
+            // For hijacked tabs, call the hijack handler directly
+            customDelegate.tabBar(self, didHijack: item)
+            return
+        }
+        
+        print("ESTabBar.selectAction: NON-HIJACKED tab - skipping to prevent crash")
+        // For non-hijacked tabs, don't call our custom select method
+        // Let the system UITabBar handle the selection through normal mechanisms
+        // This prevents "Directly modifying a tab bar managed by a tab bar controller is not allowed" crash
     }
     
     @objc func select(itemAtIndex idx: Int, animated: Bool) {
@@ -446,16 +732,19 @@ internal extension ESTabBar /* Actions */ {
             return
         }
         
+        print("ESTabBar.select: index=\(newIndex), current=\(currentIndex)")
+        
         // Check if this tab should be hijacked first
         if (customDelegate?.tabBar(self, shouldHijack: item) ?? false) == true {
+            print("ESTabBar.select: HIJACKED - blocking selection")
             // Hijacked tabs are treated as modal actions - no selection state change
+            // Prevent any system glass/slide effects by not touching selectedItem at all
             
             if animated {
                 if let item = item as? ESTabBarItem {
                     item.contentView.select(animated: animated, completion: { [weak self] in
                         item.contentView.deselect(animated: false, completion: nil)
-                        // Restore the previously selected tab to maintain visual consistency
-                        self?.restoreSelectionAfterHijack(currentIndex: currentIndex, animated: false)
+                        // Don't restore selection - this prevents glass effect
                         // Call didHijack after animation completes with a small delay for modal presentation
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                             self?.customDelegate?.tabBar(self!, didHijack: item)
@@ -464,8 +753,7 @@ internal extension ESTabBar /* Actions */ {
                 } else if self.isMoreItem(newIndex) {
                     moreContentView?.select(animated: animated, completion: { [weak self] in
                         self?.moreContentView?.deselect(animated: false, completion: nil)
-                        // Restore the previously selected tab to maintain visual consistency
-                        self?.restoreSelectionAfterHijack(currentIndex: currentIndex, animated: false)
+                        // Don't restore selection - this prevents glass effect
                         // Call didHijack after animation completes with a small delay for modal presentation
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                             self?.customDelegate?.tabBar(self!, didHijack: item)
@@ -474,16 +762,17 @@ internal extension ESTabBar /* Actions */ {
                 }
             } else {
                 // If not animated, call didHijack with a small delay for modal presentation
-                self.restoreSelectionAfterHijack(currentIndex: currentIndex, animated: false)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                     self.customDelegate?.tabBar(self, didHijack: item)
                 }
             }
             // Early return for hijacked tabs - skip delegate call and selectedIndex change
+            print("ESTabBar.select: HIJACKED - early return, no delegate call")
             self.updateAccessibilityLabels()
             return
         }
         
+        print("ESTabBar.select: NON-HIJACKED - proceeding with selection")
         // For non-hijacked tabs, check if selection should proceed
         if (customDelegate?.tabBar(self, shouldSelect: item) ?? true) == false {
             return
@@ -532,7 +821,16 @@ internal extension ESTabBar /* Actions */ {
             }
         }
         
-        delegate?.tabBar?(self, didSelect: item)
+        // Only notify delegate for non-hijacked tabs - double check before calling
+        if let customDelegate = customDelegate,
+           customDelegate.tabBar(self, shouldHijack: item) {
+            print("ESTabBar: BLOCKING delegate call for hijacked item")
+            // Don't call delegate for hijacked tabs
+        } else {
+            print("ESTabBar: NON-HIJACKED tab - skipping delegate call to prevent crash")
+            // Skip delegate call to prevent "Directly modifying a tab bar managed by a tab bar controller is not allowed" crash
+            // The tab bar controller will handle the selection through normal UITabBar mechanisms
+        }
         self.updateAccessibilityLabels()
     }
     

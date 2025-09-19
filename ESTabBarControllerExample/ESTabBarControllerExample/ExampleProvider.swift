@@ -276,6 +276,7 @@ enum ExampleProvider {
         tabBarController.title = "Irregularity"
         tabBarController.tabBar.shadowImage = UIImage(named: "transparent")
         tabBarController.tabBar.backgroundImage = UIImage(named: "background_dark")
+        
         tabBarController.shouldHijackHandler = {
             tabbarController, viewController, index in
             if index == 2 {
@@ -286,7 +287,10 @@ enum ExampleProvider {
         tabBarController.didHijackHandler = {
             [weak tabBarController] tabbarController, viewController, index in
             
+            print("🚀 HIJACK HANDLER CALLED for index \(index)!")
+            
 			DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+				print("🚀 Presenting modal for hijacked tab \(index)")
 				let alertController = UIAlertController.init(title: nil, message: nil, preferredStyle: .actionSheet)
 				let takePhotoAction = UIAlertAction(title: "Take a photo", style: .default, handler: nil)
 				alertController.addAction(takePhotoAction)
