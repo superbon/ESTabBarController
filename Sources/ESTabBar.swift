@@ -94,6 +94,10 @@ open class ESTabBar: UITabBar {
     private var lastHijackTime: TimeInterval = 0
     private var lastHijackedIndex: Int = -1
     
+    /// Prevent multiple selection calls during a single touch event
+    private var lastSelectionTime: TimeInterval = 0
+    private var lastSelectedIndex: Int = -1
+    
     /// set value > 0 to change tabbar height
     /// 设置 > 0 的值了来修改TabBar的高度
     public var tabBarHeight: CGFloat?{
@@ -161,110 +165,82 @@ open class ESTabBar: UITabBar {
         }
     }
     
-    // Override touchesEnded to prevent system glass effect on hijacked tabs
+    // Override touchesEnded to prevent system glass effect on ALL tabs
     open override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        // GLOBAL glass effect prevention for ALL tabs
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        
-        guard let touch = touches.first else {
-            super.touchesEnded(touches, with: event)
-            CATransaction.commit()
-            return
-        }
-        
-        let location = touch.location(in: self)
-        
-        // Check if touch is on a hijacked tab
-        for (index, container) in containers.enumerated() {
-            if container.frame.contains(location) {
-                if let item = items?[index],
-                   let customDelegate = customDelegate,
-                   customDelegate.tabBar(self, shouldHijack: item) {
-                    print("ESTabBar.touchesEnded: HIJACKED tab touched - blocking system handling")
-                    // Don't call super for hijacked tabs - this prevents glass effect
-                    CATransaction.commit()
-                    return
-                }
-                break
-            }
-        }
-        
-        // For non-hijacked tabs, allow normal system handling but block animations
-        super.touchesEnded(touches, with: event)
-        CATransaction.commit()
+        // GLOBAL glass effect prevention for ALL tabs - don't call super at all
+        print("ESTabBar.touchesEnded: blocking all system processing to prevent glass effects")
+        // Completely block system processing - no super call
     }
     
-    // Override touchesCancelled to prevent system glass effect on hijacked tabs
+    // Override touchesCancelled to prevent system glass effect on ALL tabs
     open override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        // GLOBAL glass effect prevention for ALL tabs
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        
-        guard let touch = touches.first else {
-            super.touchesCancelled(touches, with: event)
-            CATransaction.commit()
-            return
-        }
-        
-        let location = touch.location(in: self)
-        
-        // Check if touch is on a hijacked tab
-        for (index, container) in containers.enumerated() {
-            if container.frame.contains(location) {
-                if let item = items?[index],
-                   let customDelegate = customDelegate,
-                   customDelegate.tabBar(self, shouldHijack: item) {
-                    print("ESTabBar.touchesCancelled: HIJACKED tab touched - blocking system handling")
-                    // Don't call super for hijacked tabs - this prevents glass effect
-                    CATransaction.commit()
-                    return
-                }
-                break
-            }
-        }
-        
-        // For non-hijacked tabs, allow normal system handling but block animations
-        super.touchesCancelled(touches, with: event)
-        CATransaction.commit()
+        // GLOBAL glass effect prevention for ALL tabs - don't call super at all
+        print("ESTabBar.touchesCancelled: blocking all system processing to prevent glass effects")
+        // Completely block system processing - no super call
     }
     
-    // Override hitTest to prevent system from detecting touches on hijacked tabs
+    // Override hitTest to prevent system from detecting touches on ALL tabs
     open override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        // Check if touch is on a hijacked tab
+        // Check if touch is on ANY tab container
         for (index, container) in containers.enumerated() {
             if container.frame.contains(point) {
                 if let item = items?[index],
-                   let customDelegate = customDelegate,
-                   customDelegate.tabBar(self, shouldHijack: item) {
+                   let customDelegate = customDelegate {
                     
-                    let currentTime = Date.timeIntervalSinceReferenceDate
-                    
-                    // Prevent multiple calls within 0.5 seconds for the same tab
-                    if currentTime - lastHijackTime < 0.5 && lastHijackedIndex == index {
-                        print("ESTabBar.hitTest: HIJACKED tab \(index) hit - debouncing multiple calls")
+                    // Check if it's a hijacked tab
+                    if customDelegate.tabBar(self, shouldHijack: item) {
+                        let currentTime = Date.timeIntervalSinceReferenceDate
+                        
+                        // Prevent multiple calls within 0.5 seconds for the same tab
+                        if currentTime - lastHijackTime < 0.5 && lastHijackedIndex == index {
+                            print("ESTabBar.hitTest: HIJACKED tab \(index) hit - debouncing multiple calls")
+                            return nil
+                        }
+                        
+                        print("ESTabBar.hitTest: HIJACKED tab \(index) hit - returning nil and triggering hijack")
+                        
+                        lastHijackTime = currentTime
+                        lastHijackedIndex = index
+                        
+                        // Trigger the hijack handler
+                        DispatchQueue.main.async {
+                            print("ESTabBar.hitTest: calling didHijack for tab \(index) from hitTest")
+                            customDelegate.tabBar(self, didHijack: item)
+                        }
+                        
+                        return nil
+                    } else {
+                        // For non-hijacked tabs, also return nil but trigger selection manually
+                        let currentTime = Date.timeIntervalSinceReferenceDate
+                        
+                        // Prevent multiple calls within 0.5 seconds for the same tab
+                        if currentTime - lastSelectionTime < 0.5 && lastSelectedIndex == index {
+                            print("ESTabBar.hitTest: NON-HIJACKED tab \(index) hit - debouncing multiple calls")
+                            return nil
+                        }
+                        
+                        print("ESTabBar.hitTest: NON-HIJACKED tab \(index) hit - returning nil and triggering manual selection")
+                        
+                        lastSelectionTime = currentTime
+                        lastSelectedIndex = index
+                        
+                        DispatchQueue.main.async {
+                            print("ESTabBar.hitTest: manually selecting tab \(index)")
+                            // Check if selection should proceed
+                            if customDelegate.tabBar(self, shouldSelect: item) {
+                                // Trigger the system delegate manually
+                                self.delegate?.tabBar?(self, didSelect: item)
+                            }
+                        }
+                        
                         return nil
                     }
-                    
-                    print("ESTabBar.hitTest: HIJACKED tab \(index) hit - returning nil and triggering hijack")
-                    
-                    lastHijackTime = currentTime
-                    lastHijackedIndex = index
-                    
-                    // Trigger the hijack handler with a small delay to ensure single call
-                    DispatchQueue.main.async {
-                        print("ESTabBar.hitTest: calling didHijack for tab \(index) from hitTest")
-                        customDelegate.tabBar(self, didHijack: item)
-                    }
-                    
-                    // Return nil to completely prevent system processing
-                    return nil
                 }
                 break
             }
         }
         
-        // For non-hijacked tabs, allow normal system hit testing
+        // For areas outside containers, allow minimal system processing
         return super.hitTest(point, with: event)
     }
     
@@ -307,57 +283,10 @@ open class ESTabBar: UITabBar {
     
     // Override ALL touch methods to disable glass effects globally
     open override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        // GLOBAL glass effect prevention for ALL tabs
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        if let window = self.window {
-            window.layer.speed = 0.01 // Extremely slow to prevent visible animations
-        }
-        
-        guard let touch = touches.first else {
-            super.touchesBegan(touches, with: event)
-            CATransaction.commit()
-            return
-        }
-        
-        let location = touch.location(in: self)
-        
-        // Check if touch is on a hijacked tab
-        for (index, container) in containers.enumerated() {
-            if container.frame.contains(location) {
-                if let item = items?[index],
-                   let customDelegate = customDelegate,
-                   customDelegate.tabBar(self, shouldHijack: item) {
-                    print("ESTabBar.touchesBegan: HIJACKED tab \(index) touched - IMMEDIATELY triggering hijack handler")
-                    
-                    // Re-enable animations first
-                    CATransaction.commit()
-                    if let window = self.window {
-                        window.layer.speed = 1.0
-                    }
-                    
-                    // Immediately trigger the hijack handler to beat the system delegate
-                    print("ESTabBar.touchesBegan: calling didHijack for tab \(index) NOW")
-                    customDelegate.tabBar(self, didHijack: item)
-                    
-                    // Don't call super to prevent any system processing
-                    return
-                }
-                break
-            }
-        }
-        
-        // For non-hijacked tabs, still prevent glass effect but allow selection
-        print("ESTabBar.touchesBegan: NON-HIJACKED tab touched - preventing glass effect")
-        super.touchesBegan(touches, with: event)
-        
-        // Re-enable animations quickly for normal tabs
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            if let window = self.window {
-                window.layer.speed = 1.0
-            }
-        }
-        CATransaction.commit()
+        // Since hitTest returns nil for all tab touches, this should rarely be called
+        // Block any remaining system processing
+        print("ESTabBar.touchesBegan: blocking any remaining system touch processing")
+        // Don't call super to prevent any glass effects
     }
     
     // Store the original delegate
