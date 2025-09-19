@@ -116,16 +116,14 @@ open class ESTabBarController: UITabBarController, ESTabBarDelegate {
             tabBar.layer.allowsGroupOpacity = false
             tabBar.layer.shouldRasterize = false
             
-            // Completely disable ALL system selection animations
+            // Completely disable system selection animations but preserve icon colors
             if #available(iOS 13.0, *) {
                 tabBar.standardAppearance.selectionIndicatorTintColor = UIColor.clear
                 tabBar.standardAppearance.selectionIndicatorImage = nil
-                tabBar.standardAppearance.stackedLayoutAppearance.selected.titleTextAttributes = [:]
-                tabBar.standardAppearance.stackedLayoutAppearance.selected.iconColor = UIColor.clear
-                tabBar.standardAppearance.inlineLayoutAppearance.selected.titleTextAttributes = [:]
-                tabBar.standardAppearance.inlineLayoutAppearance.selected.iconColor = UIColor.clear
-                tabBar.standardAppearance.compactInlineLayoutAppearance.selected.titleTextAttributes = [:]
-                tabBar.standardAppearance.compactInlineLayoutAppearance.selected.iconColor = UIColor.clear
+                // Don't clear icon colors - let ESTabBar handle them
+                // tabBar.standardAppearance.stackedLayoutAppearance.selected.iconColor = UIColor.clear
+                // tabBar.standardAppearance.inlineLayoutAppearance.selected.iconColor = UIColor.clear
+                // tabBar.standardAppearance.compactInlineLayoutAppearance.selected.iconColor = UIColor.clear
                 
                 if #available(iOS 15.0, *) {
                     tabBar.scrollEdgeAppearance = tabBar.standardAppearance

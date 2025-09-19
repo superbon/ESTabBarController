@@ -226,9 +226,13 @@ open class ESTabBar: UITabBar {
                         
                         DispatchQueue.main.async {
                             print("ESTabBar.hitTest: manually selecting tab \(index)")
-                            // Check if selection should proceed
-                            if customDelegate.tabBar(self, shouldSelect: item) {
-                                // Trigger the system delegate manually
+                            // Use the proper select method to handle visual updates
+                            self.select(itemAtIndex: index, animated: false)
+                            
+                            // Also trigger the delegate call for view controller switching
+                            if let customDelegate = self.customDelegate,
+                               customDelegate.tabBar(self, shouldSelect: item) {
+                                print("ESTabBar.hitTest: triggering delegate for view controller switch")
                                 self.delegate?.tabBar?(self, didSelect: item)
                             }
                         }
@@ -250,10 +254,13 @@ open class ESTabBar: UITabBar {
         set { /* ignore */ }
     }
     
-    // Disable system animations completely
+    // Disable system animations completely but allow content view updates
     open override func setNeedsDisplay() {
-        // Block all display updates that can trigger glass effects
-        return
+        // Allow display updates for content views but disable system glass effects
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        super.setNeedsDisplay()
+        CATransaction.commit()
     }
     
     // Override layout methods to prevent glass effect animations
