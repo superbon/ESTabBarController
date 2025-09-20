@@ -328,7 +328,7 @@ open class ESTabBarItemContentView: UIView {
     }
 
     // MARK: - INTERNAL METHODS
-    internal final func select(animated: Bool, completion: (() -> ())?) {
+    public final func select(animated: Bool, completion: (() -> ())?) {
         selected = true
         if enabled && highlighted {
             highlighted = false
@@ -342,13 +342,13 @@ open class ESTabBarItemContentView: UIView {
         }
     }
     
-    internal final func deselect(animated: Bool, completion: (() -> ())?) {
+    public final func deselect(animated: Bool, completion: (() -> ())?) {
         selected = false
         updateDisplay()
         self.deselectAnimation(animated: animated, completion: completion)
     }
     
-    internal final func reselect(animated: Bool, completion: (() -> ())?) {
+    public final func reselect(animated: Bool, completion: (() -> ())?) {
         if selected == false {
             select(animated: animated, completion: completion)
         } else {
