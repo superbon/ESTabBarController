@@ -335,11 +335,16 @@ open class ESTabBar: UITabBar {
     }
     
     open override func layoutSubviews() {
+        print("ESTabBar.layoutSubviews: Starting with bounds: \(bounds)")
+        
         // Completely disable animations during layout
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         
         super.layoutSubviews()
+        
+        print("ESTabBar.layoutSubviews: After super.layoutSubviews(), bounds: \(bounds)")
+        
         self.updateLayout()
         
         CATransaction.commit()
@@ -448,6 +453,8 @@ internal extension ESTabBar /* Layout */ {    func updateLayout() {
             return
         }
         
+        print("ESTabBar.updateLayout: Starting layout with bounds: \(bounds), itemCount: \(tabBarItems.count)")
+        
         let tabBarButtons = subviews.filter { subview -> Bool in
             if let cls = NSClassFromString("UITabBarButton") {
                 return subview.isKind(of: cls)
@@ -455,6 +462,11 @@ internal extension ESTabBar /* Layout */ {    func updateLayout() {
             return false
             } .sorted { (subview1, subview2) -> Bool in
                 return subview1.frame.origin.x < subview2.frame.origin.x
+        }
+        
+        print("ESTabBar.updateLayout: Found \(tabBarButtons.count) tabBarButtons")
+        for (idx, button) in tabBarButtons.enumerated() {
+            print("ESTabBar.updateLayout: TabBarButton \(idx) frame: \(button.frame)")
         }
         
         if isCustomizing {
@@ -491,20 +503,25 @@ internal extension ESTabBar /* Layout */ {    func updateLayout() {
         
         if layoutBaseSystem {
             // System itemPositioning
+            print("ESTabBar.updateLayout: Using system layout base")
             for (idx, container) in containers.enumerated(){
                 if idx < tabBarButtons.count && !tabBarButtons[idx].frame.isEmpty {
                     container.frame = tabBarButtons[idx].frame
+                    print("ESTabBar.updateLayout: Set container \(idx) frame from tabBarButton: \(container.frame)")
                 } else {
                     // Fallback: if no valid tabBarButton frame, distribute equally
                     guard containers.count > 0 else { continue }
                     let containerWidth = bounds.width / CGFloat(containers.count)
                     let containerHeight = bounds.height
                     container.frame = CGRect(x: CGFloat(idx) * containerWidth, y: 0, width: containerWidth, height: containerHeight)
+                    print("ESTabBar.updateLayout: Set container \(idx) frame with fallback: \(container.frame)")
                 }
             }
         } else {
             // Custom itemPositioning
+            print("ESTabBar.updateLayout: Using custom layout")
             guard bounds.size.width > 0 && bounds.size.height > 0 && containers.count > 0 else {
+                print("ESTabBar.updateLayout: Invalid bounds or no containers - bounds: \(bounds), containers: \(containers.count)")
                 return
             }
             
@@ -523,8 +540,11 @@ internal extension ESTabBar /* Layout */ {    func updateLayout() {
             let eachWidth = _itemWidth == 0.0 ? width / CGFloat(containers.count) : _itemWidth
             let eachSpacing = _itemSpacing == 0.0 ? 0.0 : _itemSpacing
             
-            for container in containers {
+            print("ESTabBar.updateLayout: Custom layout - eachWidth: \(eachWidth), height: \(height)")
+            
+            for (idx, container) in containers.enumerated() {
                 container.frame = CGRect.init(x: x, y: y, width: eachWidth, height: height)
+                print("ESTabBar.updateLayout: Set container \(idx) frame with custom: \(container.frame)")
                 x += eachWidth
                 x += eachSpacing
             }
@@ -562,10 +582,15 @@ internal extension ESTabBar /* Actions */ {
             ESTabBarController.printError("empty items")
             return
         }
+        
+        print("ESTabBar.reload: Loading \(tabBarItems.count) items")
+        
         for (idx, item) in tabBarItems.enumerated() {
             let container = ESTabBarItemContainer.init(self, tag: 1000 + idx)
             self.addSubview(container)
             self.containers.append(container)
+            
+            print("ESTabBar.reload: Added container \(idx) with frame: \(container.frame)")
             
             // Disable user interaction for hijacked tabs to prevent any visual feedback
             if let customDelegate = customDelegate,
@@ -578,12 +603,17 @@ internal extension ESTabBar /* Actions */ {
             
             if let item = item as? ESTabBarItem {
                 container.addSubview(item.contentView)
+                print("ESTabBar.reload: Added ESTabBarItem content view for item \(idx)")
+            } else {
+                print("ESTabBar.reload: Using system UITabBarItem for item \(idx)")
             }
+            
             if self.isMoreItem(idx), let moreContentView = moreContentView {
                 container.addSubview(moreContentView)
             }
         }
         
+        print("ESTabBar.reload: Total containers created: \(containers.count)")
         self.updateAccessibilityLabels()
         self.setNeedsLayout()
         // Force layout update to ensure proper visibility

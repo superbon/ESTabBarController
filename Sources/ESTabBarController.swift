@@ -1,6 +1,4 @@
 //
-//  ESTabBarController.swift
-//
 //  Created by Vincent Li on 2017/2/8.
 //  Copyright (c) 2013-2020 ESTabBarController (https://github.com/eggswift/ESTabBarController)
 //
@@ -35,7 +33,7 @@ open class ESTabBarController: UITabBarController, ESTabBarDelegate {
     /// 打印异常
     public static func printError(_ description: String) {
         #if DEBUG
-            print("ERROR: ESTabBarController catch an error '\(description)' \n")
+        print("ERROR: ESTabBarController catch an error '\(description)' \n")
         #endif
     }
     
@@ -52,13 +50,10 @@ open class ESTabBarController: UITabBarController, ESTabBarDelegate {
     /// Hijack select action.
     open var didHijackHandler: ESTabBarControllerDidHijackHandler?
     
-    /// Observer tabBarController's selectedViewController. change its selection when it will-set.
+    // MARK: - Selection bridging
     open override var selectedViewController: UIViewController? {
         willSet {
-            guard let newValue = newValue else {
-                // if newValue == nil ...
-                return
-            }
+            guard let newValue = newValue else { return }
             guard !ignoreNextSelection else {
                 ignoreNextSelection = false
                 return
@@ -66,127 +61,145 @@ open class ESTabBarController: UITabBarController, ESTabBarDelegate {
             guard let tabBar = self.tabBar as? ESTabBar, let items = tabBar.items, let index = viewControllers?.firstIndex(of: newValue) else {
                 return
             }
-            let value = (ESTabBarController.isShowingMore(self) && index > items.count - 1) ? items.count - 1 : index
+            let _ = (ESTabBarController.isShowingMore(self) && index > items.count - 1) ? items.count - 1 : index
+            // Prevent direct select to avoid UIKit crash
             print("ESTabBarController.selectedViewController: skipping select call to prevent crash")
-            // Skip calling tabBar.select to prevent "Directly modifying a tab bar managed by a tab bar controller is not allowed" crash
-            // The system UITabBar will handle the selection through normal mechanisms
         }
     }
     
-    /// Observer tabBarController's selectedIndex. change its selection when it will-set.
     open override var selectedIndex: Int {
         willSet {
-            print("ESTabBarController.selectedIndex willSet: newValue=\(newValue)")
+            guard newValue != NSNotFound else { return }
             guard !ignoreNextSelection else {
                 ignoreNextSelection = false
-                print("ESTabBarController.selectedIndex: ignoring due to ignoreNextSelection flag")
                 return
             }
-            
-            // Check if the new index corresponds to a hijacked tab
             if newValue >= 0 && newValue < viewControllers?.count ?? 0,
                let vc = viewControllers?[newValue],
                shouldHijackHandler?(self, vc, newValue) ?? false {
                 print("ESTabBarController.selectedIndex: BLOCKED hijacked index \(newValue)")
-                // This is a hijacked tab - don't change selectedIndex
                 return
             }
-            
-            print("ESTabBarController.selectedIndex: allowing change to \(newValue)")
             guard let tabBar = self.tabBar as? ESTabBar, let items = tabBar.items else {
                 return
             }
-            let value = (ESTabBarController.isShowingMore(self) && newValue > items.count - 1) ? items.count - 1 : newValue
+            let _ = (ESTabBarController.isShowingMore(self) && newValue > items.count - 1) ? items.count - 1 : newValue
             print("ESTabBarController.selectedIndex: skipping select call to prevent crash")
-            // Skip calling tabBar.select to prevent "Directly modifying a tab bar managed by a tab bar controller is not allowed" crash
-            // The system UITabBar will handle the selection through normal mechanisms
         }
     }
     
-    /// Customize set tabBar use KVC.
+    // MARK: - Lifecycle
     open override func viewDidLoad() {
         super.viewDidLoad()
-        let tabBar = { () -> ESTabBar in 
-            let tabBar = ESTabBar()
-            tabBar.delegate = self
-            tabBar.customDelegate = self
-            tabBar.tabBarController = self
-            
-            // GLOBAL glass effect elimination for ALL tabs
-            tabBar.layer.allowsGroupOpacity = false
-            tabBar.layer.shouldRasterize = false
-            
-            // Completely disable system selection animations but preserve icon colors
-            if #available(iOS 13.0, *) {
-                tabBar.standardAppearance.selectionIndicatorTintColor = UIColor.clear
-                tabBar.standardAppearance.selectionIndicatorImage = nil
-                // Don't clear icon colors - let ESTabBar handle them
-                // tabBar.standardAppearance.stackedLayoutAppearance.selected.iconColor = UIColor.clear
-                // tabBar.standardAppearance.inlineLayoutAppearance.selected.iconColor = UIColor.clear
-                // tabBar.standardAppearance.compactInlineLayoutAppearance.selected.iconColor = UIColor.clear
-                
-                if #available(iOS 15.0, *) {
-                    tabBar.scrollEdgeAppearance = tabBar.standardAppearance
-                }
-            }
-            
-            // Legacy iOS support
-            tabBar.selectionIndicatorImage = nil
-            tabBar.backgroundImage = UIImage()
-            tabBar.shadowImage = UIImage()
-            
-            return tabBar
-        }()
-        self.setValue(tabBar, forKey: "tabBar")
-        
-        // Global animation blocking at controller level
-        self.view.layer.allowsGroupOpacity = false
-        self.view.layer.shouldRasterize = false
+        forceReplaceSystemTabBar(reason: "viewDidLoad")
+        hideNativeTabBarSubviews()
+        bringCustomTabBarToFront()
+        view.layer.allowsGroupOpacity = false
+        view.layer.shouldRasterize = false
     }
-
+    
+    open override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        forceReplaceSystemTabBar(reason: "viewWillAppear")
+        hideNativeTabBarSubviews()
+        bringCustomTabBarToFront()
+    }
+    
+    open override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        forceReplaceSystemTabBar(reason: "viewDidAppear")
+        hideNativeTabBarSubviews()
+        bringCustomTabBarToFront()
+        if let es = tabBar as? ESTabBar {
+            es.isHidden = false
+            es.alpha = 1.0
+        }
+    }
+    
+    open override func viewWillLayoutSubviews() {
+        super.viewWillLayoutSubviews()
+        // UIKit may add a UITabBar back during layout on some transitions
+        forceReplaceSystemTabBar(reason: "viewWillLayoutSubviews")
+        hideNativeTabBarSubviews()
+        bringCustomTabBarToFront()
+    }
+    
+    open override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        hideNativeTabBarSubviews()
+        bringCustomTabBarToFront()
+    }
+    
+    open override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        // Appearance may be reset across trait changes
+        forceReplaceSystemTabBar(reason: "traitCollectionDidChange")
+        hideNativeTabBarSubviews()
+        bringCustomTabBarToFront()
+    }
+    
+    // MARK: - Ensure replacement on API usage
+    open override func setViewControllers(_ viewControllers: [UIViewController]?, animated: Bool) {
+        super.setViewControllers(viewControllers, animated: animated)
+        DispatchQueue.main.async {
+            self.forceReplaceSystemTabBar(reason: "setViewControllers")
+            self.hideNativeTabBarSubviews()
+            self.bringCustomTabBarToFront()
+        }
+    }
+    
+    /// Convenience method to change selectedIndex while preserving our custom tab bar setup.
+    open func setSelectedIndex(_ selectedIndex: Int) {
+        // Avoid triggering our selectedIndex override logic
+        ignoreNextSelection = true
+        self.selectedIndex = selectedIndex
+        // Ensure we still have our custom bar after selection changes
+        DispatchQueue.main.async {
+            self.forceReplaceSystemTabBar(reason: "setSelectedIndex")
+            self.hideNativeTabBarSubviews()
+            self.bringCustomTabBarToFront()
+        }
+    }
+    
+    open override func willMove(toParent parent: UIViewController?) {
+        super.willMove(toParent: parent)
+        DispatchQueue.main.async {
+            self.forceReplaceSystemTabBar(reason: "willMoveToParent")
+            self.hideNativeTabBarSubviews()
+        }
+    }
+    
+    open override func didMove(toParent parent: UIViewController?) {
+        super.didMove(toParent: parent)
+        DispatchQueue.main.async {
+            self.forceReplaceSystemTabBar(reason: "didMoveToParent")
+            self.hideNativeTabBarSubviews()
+            self.bringCustomTabBarToFront()
+        }
+    }
+    
     // MARK: - UITabBar delegate
     public func tabBar(_ tabBar: UITabBar, shouldSelect item: UITabBarItem) -> Bool {
-        guard let idx = tabBar.items?.firstIndex(of: item) else {
-            return true
-        }
-        
-        print("ESTabBarController.shouldSelect (system): index=\(idx)")
-        
-        // Check if this tab is hijacked - if so, block system selection entirely
+        guard let idx = tabBar.items?.firstIndex(of: item) else { return true }
         if let vc = viewControllers?[idx],
            shouldHijackHandler?(self, vc, idx) ?? false {
-            print("ESTabBarController.shouldSelect (system): BLOCKING hijacked tab \(idx) and calling hijack handler")
-            // Call the hijack handler directly here since we're blocking the selection
             didHijackHandler?(self, vc, idx)
             return false
         }
-        
-        print("ESTabBarController.shouldSelect (system): allowing non-hijacked tab \(idx)")
         return true
     }
     
     open override func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
-        guard let idx = tabBar.items?.firstIndex(of: item) else {
-            return;
-        }
-        
-        print("ESTabBarController.didSelect: index=\(idx)")
-        
-        // Check if this tab is hijacked - if so, don't change selectedIndex
+        guard let idx = tabBar.items?.firstIndex(of: item) else { return }
         if let vc = viewControllers?[idx],
            shouldHijackHandler?(self, vc, idx) ?? false {
-            print("ESTabBarController.didSelect: BLOCKED hijacked tab from changing selectedIndex")
-            // This is a hijacked tab - don't change selection
+            // blocked
             return
         }
-        
-        print("ESTabBarController.didSelect: proceeding with non-hijacked tab")
-        // Note: Non-hijacked tab selection proceeds normally
-        
         if idx == tabBar.items!.count - 1, ESTabBarController.isShowingMore(self) {
             ignoreNextSelection = true
             selectedViewController = moreNavigationController
-            return;
+            return
         }
         if let vc = viewControllers?[idx] {
             ignoreNextSelection = true
@@ -196,15 +209,11 @@ open class ESTabBarController: UITabBarController, ESTabBarDelegate {
     }
     
     open override func tabBar(_ tabBar: UITabBar, willBeginCustomizing items: [UITabBarItem]) {
-        if let tabBar = tabBar as? ESTabBar {
-            tabBar.updateLayout()
-        }
+        (tabBar as? ESTabBar)?.updateLayout()
     }
     
     open override func tabBar(_ tabBar: UITabBar, didEndCustomizing items: [UITabBarItem], changed: Bool) {
-        if let tabBar = tabBar as? ESTabBar {
-            tabBar.updateLayout()
-        }
+        (tabBar as? ESTabBar)?.updateLayout()
     }
     
     // MARK: - ESTabBar delegate
@@ -220,5 +229,83 @@ open class ESTabBarController: UITabBarController, ESTabBarDelegate {
             didHijackHandler?(self, vc, idx)
         }
     }
+
+    // MARK: - Replacement & Hiding
+    private func forceReplaceSystemTabBar(reason: String) {
+        if let current = self.tabBar as? ESTabBar {
+            // Ensure wiring and appearance are intact
+            current.delegate = self
+            current.customDelegate = self
+            current.tabBarController = self
+            current.isHidden = false
+            current.alpha = 1.0
+            configureAppearance(for: current)
+            return
+        }
+        // Replace any system UITabBar with ESTabBar
+        let newTabBar = ESTabBar()
+        newTabBar.delegate = self
+        newTabBar.customDelegate = self
+        newTabBar.tabBarController = self
+        configureAppearance(for: newTabBar)
+        self.setValue(newTabBar, forKey: "tabBar")
+    }
     
+    private func configureAppearance(for tabBar: ESTabBar) {
+        tabBar.backgroundImage = UIImage()
+        tabBar.shadowImage = UIImage()
+        tabBar.isTranslucent = true
+        tabBar.backgroundColor = .clear
+        tabBar.layer.shadowOpacity = 0
+        tabBar.layer.shadowColor = UIColor.clear.cgColor
+        tabBar.layer.backgroundColor = UIColor.clear.cgColor
+
+        if #available(iOS 13.0, *) {
+            let appearance = UITabBarAppearance()
+            appearance.configureWithTransparentBackground()
+            appearance.backgroundColor = .clear
+            appearance.shadowColor = .clear
+            appearance.shadowImage = nil
+            appearance.backgroundImage = nil
+            tabBar.standardAppearance = appearance
+            if #available(iOS 15.0, *) {
+                tabBar.scrollEdgeAppearance = appearance
+            }
+        }
+    }
+    
+    private func bringCustomTabBarToFront() {
+        guard let esTabBar = self.tabBar as? ESTabBar else { return }
+        // Ensure it's in the view hierarchy and on top
+        if esTabBar.superview !== self.view {
+            esTabBar.removeFromSuperview()
+            self.view.addSubview(esTabBar)
+        }
+        self.view.bringSubviewToFront(esTabBar)
+    }
+    
+    private func hideNativeTabBarSubviews() {
+        // Remove any UITabBar instances that are not our ESTabBar
+        for subview in self.view.subviews {
+            if subview is UITabBar && !(subview is ESTabBar) {
+                subview.removeFromSuperview()
+            }
+        }
+        // Also hide any system tab bar buttons within our ESTabBar
+        if let esTabBar = self.tabBar as? ESTabBar {
+            let systemButtons = esTabBar.subviews.filter { subview -> Bool in
+                if let cls = NSClassFromString("UITabBarButton") {
+                    return subview.isKind(of: cls)
+                }
+                return false
+            }
+            for btn in systemButtons {
+                btn.isHidden = true
+                btn.isUserInteractionEnabled = false
+                btn.alpha = 0.0
+                // If UIKit re-added them, remove to be safe
+                btn.removeFromSuperview()
+            }
+        }
+    }
 }
