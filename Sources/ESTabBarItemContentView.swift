@@ -257,25 +257,18 @@ open class ESTabBarItemContentView: UIView {
             if !imageView.isHidden && !titleLabel.isHidden {
                 titleLabel.font = UIFont.systemFont(ofSize: f)
                 titleLabel.sizeToFit()
-                if #available(iOS 11.0, *), isWide {
-                    titleLabel.frame = CGRect.init(x: (w - titleLabel.bounds.size.width) / 2.0 + (UIScreen.main.scale == 3.0 ? 14.25 : 12.25) + titlePositionAdjustment.horizontal,
-                                                   y: (h - titleLabel.bounds.size.height) / 2.0 + titlePositionAdjustment.vertical,
-                                                   width: titleLabel.bounds.size.width,
-                                                   height: titleLabel.bounds.size.height)
-                    imageView.frame = CGRect.init(x: titleLabel.frame.origin.x - s - (UIScreen.main.scale == 3.0 ? 6.0 : 5.0),
-                                                  y: (h - s) / 2.0,
-                                                  width: s,
-                                                  height: s)
-                } else {
-                    titleLabel.frame = CGRect.init(x: (w - titleLabel.bounds.size.width) / 2.0 + titlePositionAdjustment.horizontal,
-                                                   y: h - titleLabel.bounds.size.height - 1.0 + titlePositionAdjustment.vertical,
-                                                   width: titleLabel.bounds.size.width,
-                                                   height: titleLabel.bounds.size.height)
-                    imageView.frame = CGRect.init(x: (w - s) / 2.0,
-                                                  y: (h - s) / 2.0 - 6.0,
-                                                  width: s,
-                                                  height: s)
-                }
+                // Vertically center icon and label as a group
+                let spacing: CGFloat = 2.0
+                let totalHeight = s + spacing + titleLabel.bounds.size.height
+                let startY = (h - totalHeight) / 2.0
+                imageView.frame = CGRect(x: (w - s) / 2.0,
+                                        y: startY,
+                                        width: s,
+                                        height: s)
+                titleLabel.frame = CGRect(x: (w - titleLabel.bounds.size.width) / 2.0 + titlePositionAdjustment.horizontal,
+                                         y: imageView.frame.maxY + spacing + titlePositionAdjustment.vertical,
+                                         width: titleLabel.bounds.size.width,
+                                         height: titleLabel.bounds.size.height)
             } else if !imageView.isHidden {
                 imageView.frame = CGRect.init(x: (w - s) / 2.0,
                                               y: (h - s) / 2.0,

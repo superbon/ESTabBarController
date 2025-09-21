@@ -308,4 +308,12 @@ open class ESTabBarController: UITabBarController, ESTabBarDelegate {
             }
         }
     }
+    open override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+    // Remove bottom safe area inset to eliminate extra space (set to zero to avoid crash)
+    self.additionalSafeAreaInsets.bottom = 0
+        if let tabBar = self.tabBar as? ESTabBar {
+            tabBar.setNeedsLayout()
+        }
+    }
 }

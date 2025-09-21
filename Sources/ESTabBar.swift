@@ -530,7 +530,9 @@ internal extension ESTabBar /* Layout */ {    func updateLayout() {
                     guard containers.count > 0 else { continue }
                     let containerWidth = bounds.width / CGFloat(containers.count)
                     let containerHeight = bounds.height
-                    container.frame = CGRect(x: CGFloat(idx) * containerWidth, y: 0, width: containerWidth, height: containerHeight)
+                    let x = CGFloat(idx) * containerWidth
+                    let width = (idx == containers.count - 1) ? bounds.width - x : containerWidth
+                    container.frame = CGRect(x: x, y: 0, width: width, height: containerHeight)
                     print("ESTabBar.updateLayout: Set container \(idx) frame with fallback: \(container.frame)")
                 }
             }
