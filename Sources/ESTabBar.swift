@@ -335,6 +335,11 @@ open class ESTabBar: UITabBar {
     }
     
     open override func layoutSubviews() {
+        super.layoutSubviews()
+        // Force ESTabBar to fill the bottom, ignoring safe area
+        if let superview = self.superview {
+            self.frame = CGRect(x: 0, y: superview.bounds.height - self.bounds.height, width: superview.bounds.width, height: self.bounds.height)
+        }
         print("ESTabBar.layoutSubviews: Starting with bounds: \(bounds)")
         
         // Completely disable animations during layout
@@ -833,5 +838,14 @@ internal extension ESTabBar /* Actions */ {
             }
             
         }
+    }
+}
+
+extension ESTabBar {
+    open override var safeAreaInsets: UIEdgeInsets {
+        // Remove bottom inset to avoid extra space
+        var insets = super.safeAreaInsets
+        insets.bottom = 0
+        return insets
     }
 }
