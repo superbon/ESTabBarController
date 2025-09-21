@@ -335,28 +335,40 @@ open class ESTabBar: UITabBar {
     }
     
     open override func layoutSubviews() {
-        super.layoutSubviews()
-        // Force ESTabBar to fill the bottom, ignoring safe area
+        // Anchor ESTabBar to the bottom of its superview
         if let superview = self.superview {
-            self.frame = CGRect(x: 0, y: superview.bounds.height - self.bounds.height, width: superview.bounds.width, height: self.bounds.height)
+            let tabBarHeight = self.bounds.height
+            self.frame = CGRect(x: 0, y: superview.bounds.height - tabBarHeight, width: superview.bounds.width, height: tabBarHeight)
         }
         print("ESTabBar.layoutSubviews: Starting with bounds: \(bounds)")
-        
+
         // Completely disable animations during layout
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        
+
         super.layoutSubviews()
-        
+
         print("ESTabBar.layoutSubviews: After super.layoutSubviews(), bounds: \(bounds)")
-        
-        self.updateLayout()
-        
+
+    // Layout containers relative to tab bar bounds
+    self.updateLayout()
+
         CATransaction.commit()
-        
-        // Ensure system buttons remain hidden after layout
+
+        // Aggressively hide system tab bar buttons after layout
         DispatchQueue.main.async {
-            self.ensureSystemButtonsHidden()
+            let systemButtons = self.subviews.filter { subview -> Bool in
+                if let cls = NSClassFromString("UITabBarButton") {
+                    return subview.isKind(of: cls)
+                }
+                return false
+            }
+            for btn in systemButtons {
+                btn.isHidden = true
+                btn.isUserInteractionEnabled = false
+                btn.alpha = 0.0
+                btn.removeFromSuperview()
+            }
         }
     }
     
