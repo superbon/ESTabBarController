@@ -181,8 +181,18 @@ open class ESTabBarController: UITabBarController, ESTabBarDelegate {
     // MARK: - UITabBar delegate
     public func tabBar(_ tabBar: UITabBar, shouldSelect item: UITabBarItem) -> Bool {
         guard let idx = tabBar.items?.firstIndex(of: item) else { return true }
-        if let vc = viewControllers?[idx],
-           shouldHijackHandler?(self, vc, idx) ?? false {
+        guard let vc = viewControllers?[idx] else { return true }
+        
+        // NEW: Forward decision to UITabBarControllerDelegate.shouldSelect first
+        if let decision = delegate?.tabBarController?(self, shouldSelect: vc) {
+            if decision == false {
+                print("ESTabBarController.shouldSelect: delegate blocked selection for index \(idx)")
+                return false
+            }
+        }
+        
+        // Then apply hijack rules
+        if shouldHijackHandler?(self, vc, idx) ?? false {
             didHijackHandler?(self, vc, idx)
             return false
         }
@@ -306,6 +316,15 @@ open class ESTabBarController: UITabBarController, ESTabBarDelegate {
                 // If UIKit re-added them, remove to be safe
                 btn.removeFromSuperview()
             }
+        }
+    }
+
+    open override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+    // Remove bottom safe area inset to eliminate extra space (set to zero to avoid crash)
+    self.additionalSafeAreaInsets.bottom = 0
+        if let tabBar = self.tabBar as? ESTabBar {
+            tabBar.setNeedsLayout()
         }
     }
 }
